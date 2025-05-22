@@ -2,8 +2,8 @@
 
 ## Description
 This application provides a web interface to interact with a headless Chrome browser. 
-Users can enter a URL and view an **experimental real-time stream** of the webpage. 
-The previous click-to-interact feature is temporarily disabled in this version.
+Users can enter a URL and view an **experimental real-time stream** of the webpage, 
+and attempt basic interactions like clicking, scrolling, and typing.
 
 ## Prerequisites
 *   Python 3.7+
@@ -51,20 +51,28 @@ The previous click-to-interact feature is temporarily disabled in this version.
 1.  Once the application is running, you'll see an input field.
 2.  Enter a full website URL (e.g., `https://www.google.com`) and click "Go / Change URL."
 3.  An attempt will be made to stream screenshots of the website to the image area in real-time.
-4.  To view a different URL, enter it in the input field and click "Go / Change URL" again. The stream will restart.
+4.  You can now attempt to interact with the remote page:
+    *   **Click:** Click on the streamed image.
+    *   **Scroll:** Use your mouse wheel while the cursor is over the streamed image.
+    *   **Type:** Click on the streamed image to "focus" it (conceptually), then type on your keyboard.
+5.  To view a different URL, enter it in the input field and click "Go / Change URL" again. The stream will restart.
 
 ## Experimental Streaming Feature
 This version now includes an experimental real-time streaming feature using WebSockets (`Flask-SocketIO` with `gevent`).
 
 *   **How it works:** After submitting a URL, the backend attempts to stream screenshots of the headless browser to your client at roughly 20 FPS.
+*   **Remote Interactions:** Basic remote interactions have been added:
+    *   **Click:** Clicking on the stream sends coordinates to the remote page.
+    *   **Scroll:** Using the mouse wheel over the stream scrolls the remote page.
+    *   **Keyboard Input:** Typing attempts to send keystrokes to the main body of the remote page. This is highly experimental and may not work for inputting into specific text fields without prior focus.
+*   All interactions are experimental and their effectiveness can vary significantly depending on the target website.
 *   **Status:** This is highly experimental.
     *   Performance may vary significantly based on the website being rendered and server/network conditions.
     *   It may not be stable and can consume significant server resources (CPU/memory per connected client).
-    *   The interactive click feature (clicking on coordinates) has been temporarily disabled in this version to focus on the streaming experiment.
 
 ## Notes and Limitations
 *   The screenshot streaming feature is **experimental**, may be unstable, and is resource-intensive.
-*   The interactive click functionality (clicking on page coordinates) is **temporarily disabled** in this streaming version.
+*   All interactive features (click, scroll, keyboard) are part of the experimental stream and subject to the same stability and performance considerations.
 *   This is a basic demonstration and may not render or stream correctly for all websites, especially those with:
     *   Heavy JavaScript or complex dynamic content.
     *   Complex user interface elements.

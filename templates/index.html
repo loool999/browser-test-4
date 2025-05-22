@@ -102,6 +102,134 @@
 
             // The form submission to /navigate handles page reload.
             // After reload, the 'connect' event will re-trigger 'start_stream' if URL is present.
+
+            // --- Click Handling on Screenshot ---
+            if (screenshotImage) {
+                screenshotImage.addEventListener('click', function(event) {
+                    // Get click coordinates relative to the image
+                    const rect = screenshotImage.getBoundingClientRect();
+                    const x = event.clientX - rect.left;
+                    const y = event.clientY - rect.top;
+
+                    const clickData = {
+                        type: 'click',
+                        x: Math.round(x), // Send as integers
+                        y: Math.round(y)
+                    };
+
+                    // Emit the interaction event to the server
+                    if (socket && socket.connected) { // Ensure socket is defined and connected
+                        socket.emit('user_interaction', clickData);
+                        console.log('Sent click interaction to server:', clickData);
+                        
+                        // Optional: update status display briefly, though the stream is the main feedback
+                        // if (statusDisplay) {
+                        //     statusDisplay.textContent = `Click sent at (${clickData.x}, ${clickData.y}). Waiting for stream update...`;
+                        // }
+                    } else {
+                        console.error('Socket not connected. Cannot send click interaction.');
+                        if (statusDisplay) {
+                            statusDisplay.textContent = 'Error: Not connected to server. Cannot send click.';
+                        }
+                    }
+                });
+            } else {
+                console.error('Screenshot image element not found. Click handling not initialized.');
+            }
+
+            // --- Scroll Handling on Screenshot ---
+            if (screenshotImage) {
+                screenshotImage.addEventListener('wheel', function(event) {
+                    event.preventDefault(); // Prevent the page from scrolling locally when mouse is over the image
+
+                    const scrollData = {
+                        type: 'scroll',
+                        // Normalize delta values as some browsers might use different scales or signs.
+                        // However, for a direct proxy, raw deltaX/Y is fine to start.
+                        // Modern browsers are fairly consistent with deltaX, deltaY (pixels).
+                        deltaX: event.deltaX,
+                        deltaY: event.deltaY
+                    };
+
+                    if (socket && socket.connected) {
+                        socket.emit('user_interaction', scrollData);
+                        console.log('Sent scroll interaction to server:', scrollData);
+                        
+                        // Optional: Brief status update
+                        // if (statusDisplay) {
+                        //    statusDisplay.textContent = `Scroll sent (${scrollData.deltaX}, ${scrollData.deltaY}).`;
+                        // }
+                    } else {
+                        console.error('Socket not connected. Cannot send scroll interaction.');
+                        if (statusDisplay) {
+                            statusDisplay.textContent = 'Error: Not connected to server. Cannot send scroll.';
+                        }
+                    }
+                }, { passive: false }); // Required for event.preventDefault() to work in modern browsers
+            } else {
+                console.error('Screenshot image element not found. Scroll handling not initialized.');
+            }
+
+            // --- Keypress Handling on Document ---
+            document.addEventListener('keydown', function(event) {
+                // Determine if the event target is an input field on the local page (e.g., our URL input)
+                // to avoid capturing keys typed into local controls.
+                const activeElement = document.activeElement;
+                const isLocalInputFocused = activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA');
+
+                if (isLocalInputFocused && activeElement.id === 'url_input') { // Specifically ignore typing in our URL bar
+                    // console.log('Keydown on local URL input, ignoring for remote.');
+                    return; 
+                }
+
+                let keyToSend = event.key;
+                let sendEvent = false;
+
+                // Filter for keys to send:
+                // - Most single characters (printable)
+                // - Common control/navigation keys
+                // - Avoid sending modifier keys themselves (Shift, Control, Alt, Meta) if they are pressed alone.
+                //   (event.key for Shift is "Shift", for Control is "Control", etc.)
+                // - This simple check avoids sending just "Shift", but allows "A" when Shift+"a" is pressed.
+                if (keyToSend.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey || // Printable chars (not as part of a complex shortcut)
+                    ['Enter', 'Backspace', 'Tab', 'Delete', 
+                     'ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 
+                     'Home', 'End', 'PageUp', 'PageDown', 'Escape'].includes(keyToSend)) {
+                    sendEvent = true;
+                }
+                
+                // Special handling for Space bar - prevent default if we intend to send it
+                // and the main page body is focused (or nothing specific that would scroll).
+                if (keyToSend === ' ' && !isLocalInputFocused) {
+                    event.preventDefault(); // Prevent local page scroll if space is pressed
+                    sendEvent = true; // Ensure space is sent
+                }
+
+                if (sendEvent) {
+                    const keyData = {
+                        type: 'keypress',
+                        key: keyToSend,
+                        // Optionally send modifier states if the backend needs to handle them,
+                        // though Selenium's send_keys usually handles shifted characters correctly if `keyToSend` is already "A" vs "a".
+                        // ctrlKey: event.ctrlKey,
+                        // shiftKey: event.shiftKey,
+                        // altKey: event.altKey,
+                        // metaKey: event.metaKey
+                    };
+
+                    if (socket && socket.connected) {
+                        socket.emit('user_interaction', keyData);
+                        console.log('Sent keypress interaction to server:', keyData);
+                    } else {
+                        console.error('Socket not connected. Cannot send keypress interaction.');
+                        if (statusDisplay) {
+                            statusDisplay.textContent = 'Error: Not connected to server. Cannot send keypress.';
+                        }
+                    }
+                } else {
+                    // console.log('Keypress ignored by filter:', keyToSend, 'Ctrl:', event.ctrlKey, 'Alt:', event.altKey);
+                }
+            });
         });
     </script>
 </body>

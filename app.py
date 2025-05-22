@@ -12,7 +12,8 @@ import io
 from selenium import webdriver
 # Selenium options for configuring the Chrome driver (e.g., headless mode)
 from selenium.webdriver.chrome.options import Options
-# from selenium.webdriver.common.by import By # Example if needed
+from selenium.webdriver.common.by import By # For finding elements
+from selenium.webdriver.common.keys import Keys # For special keys, if needed later
 # from selenium.webdriver.support.ui import WebDriverWait # Example if needed
 
 # Comment out or remove: send_from_directory, ActionChains if no longer used directly
@@ -241,3 +242,93 @@ if __name__ == '__main__':
 # @app.route('/click', methods=['POST']) def handle_click(): ...
 # (Also ensure jsonify and other specific imports for these are removed if not used elsewhere)
 # The `app.run` for standard Flask development server is replaced by `socketio.run`.
+
+@socketio.on('user_interaction')
+def handle_user_interaction(data):
+    sid = request.sid
+    if not isinstance(data, dict) or 'type' not in data:
+        print(f"Received malformed user_interaction from {sid}: {data}")
+        return
+
+    interaction_type = data.get('type')
+    print(f"Received user_interaction of type '{interaction_type}' from {sid}. Data: {data}")
+
+    driver = active_drivers.get(sid)
+
+    if not driver:
+        print(f"No active driver found for {sid}. Cannot perform interaction '{interaction_type}'.")
+        # Optionally, emit an error back to the client
+        # socketio.emit('interaction_error', {'error': f'No active browser session for your ID. Please restart.'}, room=sid)
+        return
+
+    if interaction_type == 'click':
+        x = data.get('x')
+        y = data.get('y')
+
+        if x is None or y is None:
+            print(f"Missing x or y for click interaction from {sid}. Data: {data}")
+            # Optionally, emit an error back
+            # socketio.emit('interaction_error', {'error': 'Click interaction missing x or y coordinates.'}, room=sid)
+            return
+        
+        try:
+            print(f"Executing click for {sid} at ({x}, {y})")
+            # Ensure WebDriver is not None and browser is still alive (optional advanced check)
+            # driver.title # A simple check to see if driver is responsive, can raise error if browser crashed
+            driver.execute_script("document.elementFromPoint(arguments[0], arguments[1]).click();", x, y)
+            # The change will be picked up by the streaming loop automatically.
+            # No need to emit screenshot from here.
+            # socketio.sleep(0.05) # Small sleep if concerned about click processing time vs stream fps
+            print(f"Click action performed for {sid} at ({x}, {y}).")
+        except Exception as e:
+            print(f"Error executing click for {sid} at ({x}, {y}): {e}")
+            # Optionally, emit an error back to the client
+            # socketio.emit('interaction_error', {'error': f'Error processing click: {str(e)}'}, room=sid)
+
+    elif interaction_type == 'scroll': # New block for scroll
+        deltaX = data.get('deltaX')
+        deltaY = data.get('deltaY')
+
+        if deltaX is None or deltaY is None: # deltaX or deltaY can be 0, so check for None
+            print(f"Missing deltaX or deltaY for scroll interaction from {sid}. Data: {data}")
+            return
+        
+        try:
+            print(f"Executing scroll for {sid} with deltaX={deltaX}, deltaY={deltaY}")
+            driver.execute_script("window.scrollBy(arguments[0], arguments[1]);", deltaX, deltaY)
+            # The change will be picked up by the streaming loop.
+            print(f"Scroll action performed for {sid}.")
+        except Exception as e:
+            print(f"Error executing scroll for {sid} with deltaX={deltaX}, deltaY={deltaY}: {e}")
+            # Optionally, emit an error back to the client
+            # socketio.emit('interaction_error', {'error': f'Error processing scroll: {str(e)}'}, room=sid)
+
+    elif interaction_type == 'keypress': # New block for keypress
+        key_pressed = data.get('key')
+
+        if key_pressed is None:
+            print(f"Missing 'key' for keypress interaction from {sid}. Data: {data}")
+            return
+        
+        try:
+            print(f"Executing keypress for {sid} with key='{key_pressed}'")
+            # Attempt to send keys to the main body of the page.
+            # This is a basic approach and might not work for all sites or for typing into specific fields
+            # without prior focus (usually via a click).
+            body_element = driver.find_element(By.TAG_NAME, "body")
+            body_element.send_keys(key_pressed) 
+            
+            # Note: For special keys like "Enter", "ArrowLeft", etc., event.key provides these
+            # strings directly, and Selenium's send_keys often handles them correctly.
+            # If specific WebDriver Keys constants were needed (e.g. Keys.ENTER),
+            # a mapping from key_pressed string to Keys.CONSTANT would be required.
+            # For now, direct string sending is attempted.
+
+            print(f"Keypress action '{key_pressed}' performed for {sid}.")
+        except Exception as e:
+            print(f"Error executing keypress for {sid} with key='{key_pressed}': {e}")
+            # Optionally, emit an error back
+            # socketio.emit('interaction_error', {'error': f'Error processing keypress: {str(e)}'}, room=sid)
+            
+    else:
+        print(f"Received unknown or unhandled interaction type '{interaction_type}' from {sid}.")
