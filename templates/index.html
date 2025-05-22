@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Experimental Web Browser Stream</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #controls { margin-bottom: 20px; }
+        #url_input { padding: 8px; width: 400px; margin-right: 10px; }
+        #go_button { padding: 8px 15px; }
+        #status_display { margin-top: 10px; font-style: italic; color: #555; }
+        #screenshot_image_container {
+            margin-top: 20px;
+            border: 1px solid black;
+            width: 1280px; /* Match window size in init_browser or make configurable */
+            height: 800px; /* Match window size in init_browser or make configurable */
+            overflow: hidden; /* In case image is slightly different */
+            background-color: #f0f0f0; /* Placeholder color */
+        }
+        #screenshot_image {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <h1>Experimental Headless Browser Stream</h1>
+
+    <div id="controls">
+        <form method="POST" action="{{ url_for('navigate') }}">
+            <input type="text" id="url_input" name="url" placeholder="Enter URL (e.g., https://www.google.com)" 
+                   value="{{ requested_url if requested_url else '' }}">
+            <input type="submit" id="go_button" value="Go / Change URL">
+        </form>
+    </div>
+
+    <p id="status_display">Initializing...</p>
+
+    <div id="screenshot_image_container">
+        <img id="screenshot_image" src="" alt="Live stream will appear here">
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const socket = io(); // Connect to Socket.IO server on the same host/port
+
+            const urlInputField = document.getElementById('url_input');
+            const screenshotImage = document.getElementById('screenshot_image');
+            const statusDisplay = document.getElementById('status_display');
+
+            // --- SocketIO Event Handlers ---
+            socket.on('connect', () => {
+                console.log('Socket.IO: Connected to server.');
+                statusDisplay.textContent = 'Connected. If URL is entered, stream will start.';
+                
+                const currentUrl = urlInputField.value;
+                if (currentUrl && currentUrl.trim() !== '') {
+                    console.log(`Socket.IO: Automatically sending 'start_stream' for URL: ${currentUrl}`);
+                    socket.emit('start_stream', { url: currentUrl });
+                } else {
+                    statusDisplay.textContent = 'Connected. Enter a URL and click "Go" to start streaming.';
+                }
+            });
+
+            socket.on('disconnect', () => {
+                console.log('Socket.IO: Disconnected from server.');
+                statusDisplay.textContent = 'Disconnected from server. Refresh or enter new URL.';
+                // Optionally clear the image or show a placeholder
+                if (screenshotImage) {
+                    // screenshotImage.src = ''; // Or a placeholder image
+                    // screenshotImage.alt = 'Stream disconnected.';
+                }
+            });
+
+            socket.on('status', (data) => {
+                console.log('Socket.IO: Status from server:', data.message);
+                if (statusDisplay) {
+                    statusDisplay.textContent = data.message;
+                }
+            });
+
+            socket.on('screenshot_update', (data) => {
+                if (screenshotImage && data.image) {
+                    screenshotImage.src = 'data:image/png;base64,' + data.image;
+                } else {
+                    console.log("Received screenshot_update but image element or data was missing.");
+                }
+            });
+
+            socket.on('stream_error', (data) => {
+                console.error('Socket.IO: Stream error from server:', data.error);
+                if (statusDisplay) {
+                    statusDisplay.textContent = 'Stream Error: ' + data.error;
+                }
+                if (screenshotImage) {
+                    // screenshotImage.src = ''; // Clear image on error
+                    // screenshotImage.alt = 'Stream error occurred.';
+                }
+            });
+
+            // The form submission to /navigate handles page reload.
+            // After reload, the 'connect' event will re-trigger 'start_stream' if URL is present.
+        });
+    </script>
+</body>
+</html>
